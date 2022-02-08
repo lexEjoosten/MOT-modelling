@@ -8,6 +8,7 @@ import torch
 
 
 
+
 def rot(a,b,c):
     a=Tensor([[cos(a),-sin(a),0],[sin(a),cos(a),0],[0,0,1]]).cuda()
     b=Tensor([[cos(b),0,sin(b)],[0,1,0],[-sin(b),0,cos(b)]]).cuda()
@@ -85,7 +86,23 @@ def Mvect_outer(vector, Matrix):
 E=Tensor([pi/2,pi,2*pi,pi/2]).cuda()
 x=Tensor([[1,0,0],[-1,0,0],[0,1,0],[0,0,1]]).cuda().unsqueeze(2)
 x=poltocart(x)
-print(x)
+
+
+def RatesbyBeam(u,l,Pa,En,Rb):
+    s=En.Intensities(Pa.x)
+    den=(1+4*(En.fulldtun(l,u)/Rb.Gamma)**2+s)
+    Rate=s*Rb.Gamma/2*En.eploc(Pa.x)[:,:,(1+(l-u)),0]/den
+    Rate=Rate*torch.sqrt(Rb.BranRat[l+2,u+3])
+    return Rate
+    
 
 
 
+
+
+
+
+    
+
+
+    

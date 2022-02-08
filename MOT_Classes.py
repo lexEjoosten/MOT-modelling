@@ -3,13 +3,14 @@ from fun_ctions import Rot,poltocart,carttopol
 from torch import Tensor
 import numpy as np
 from numpy import pi
-import torch.functional as F
+import torch.nn.functional as F
+import MOT_vars as vr
 
 class particles():
     
     
-    def create(N, R, T, m, F_l, F_u):
-        k_B=1.3806503e-23
+    def create(N=5000 , R=0.05 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
+        k_B=1.3806503e-23 #K_B in J/K
         lamb=np.sqrt((2*k_B*T)/m)
         
         #picking a point on a quadrant on the surface of the sphere
@@ -36,6 +37,24 @@ class particles():
         particles.v=Tensor(vel).cuda()
         particles.l=(torch.ones((N,2*F_l+1))/(2*(F_l+1))).cuda()
         particles.u=(torch.zeros((N,2*F_u+1))).cuda()
+    
+    def init_track(Simlen=1000,n=0):
+        x,v=torch.zeros((Simlen+1,3)).cuda(),torch.zeros((Simlen+1,3)).cuda()
+        x[0],v[0]=particles.x[n],particles.v[0]
+        return x,v
+
+    def track(x,v,i,n=0):
+        x[i+1]=particles.x[n]
+        v[i+1]=particles.v[n]
+        return x,v
+
+
+
+
+
+
+
+
 
 class Rubidium:
     mass=1.455181063e-25 #mass given in kilograms
@@ -81,12 +100,12 @@ class Environment():
 
     
     
-    dtun=2*np.pi*12e6 #laser power detunement in rad/s
-    A=0.15 #Magnetic field gradient in T/m
+    dtun=vr.dtun
+    A=vr.A
     B=Tensor([A,A,-2*A]).cuda() #
-    LAnFr=2.4141913346e15  #Laser angular frequency (neednt be exact)
-    rad=20000 #gaussian radius of the beams
-    cutoff=10 #cutoff radius of the beams
+    LAnFr=vr.LAnFr  
+    rad=vr.rad
+    cutoff=vr.cutoff #cutoff radius of the beams
     hbar=1.055e-34 #reduced planck constant in J/s
     c=3e8 #speed of light in m/s
     Is=hbar*4*pi**3*Rubidium.Gamma*LAnFr**3/(27*c**2) #saturation intensity in W m^-2
@@ -145,8 +164,9 @@ class Environment():
     
     
     
-    def fulldtun(Ml,Mu):
-        return (Environment.dtun-Environment.Veldtun(particles.v)-Environment.Bdtun(Ml,Mu,particles.x)).transpose(0,1)
+    def fulldtun(Ml,Mu,dop,zee):
+        return (Environment.dtun-dop*Environment.Veldtun(particles.v)-zee*Environment.Bdtun(Ml,Mu,particles.x)).transpose(0,1)
+
     
 
     
@@ -155,9 +175,9 @@ class Environment():
     
     
 
-def RatesbyBeam(u,l,Pa,En,Rb):
+def RatesbyBeam(u,l,Pa,En,Rb,dop,zee):
     s=En.Intensities(Pa.x)
-    den=(1+4*(En.fulldtun(l,u)/Rb.Gamma)**2+s)
+    den=(1+4*(En.fulldtun(l,u,dop,zee)/Rb.Gamma)**2+s)
     Rate=s*Rb.Gamma/2*En.eploc(Pa.x)[:,:,(1+(l-u)),0]/den
     Rate=Rate*torch.sqrt(Rb.BranRat[l+2,u+3])
     return Rate
@@ -166,3 +186,44 @@ def RatesbyBeam(u,l,Pa,En,Rb):
 
 
 
+def forward(Pa=particles,En=Environment,Ru=Rubidium,timestep=0.001,ratemults=1, dop=True, zee=True, den_sim=False, acceladj=False, grav=False):
+    
+    Rates=torch.zeros((Pa.x.shape[0],6,5,7)).cuda()
+    #calculate rate eqns:
+    for l in range(-2,3):
+        for u in range(-3,4):
+            if abs(l-u)<2:
+                Rates[:,:,l+2,u+3]=RatesbyBeam(u,l,Pa,En,Ru,dop,zee)
+        
+    
+    
+    Rats=torch.sum(Rates,1)
+    Pnr=Pa.x.shape[0]
+    
+    
+    Br=Ru.BranRat.unsqueeze(0).repeat(Pa.x.shape[0],1,1)
+    dt=timestep
+    mul=ratemults
+    Accel=torch.zeros(Pa.x.shape,device='cuda')
+    for i in range(mul):
+        RNl=torch.mul(Rates.transpose(2,3).transpose(0,2),Pa.l).transpose(0,2).transpose(2,3)
+        RNu=torch.mul(Rates.transpose(0,2),Pa.u).transpose(0,2)
+        Rachang=torch.sum(RNl-RNu,(2,3))
+
+
+        Accel+=(Environment.hbar*Environment.Kmag/Rubidium.mass* torch.matmul(Rachang.unsqueeze(1).unsqueeze(1),Environment.Lk.unsqueeze(0).unsqueeze(3).transpose(1,2)).squeeze())/mul
+
+
+
+        if den_sim:
+            Pa.l+=(Ru.Gamma*torch.matmul(Br,Pa.u.unsqueeze(2)).squeeze()+torch.sum(RNu-RNl,(1,3)))*dt/mul
+            Pa.u+=(-Ru.Gamma*Pa.u+torch.sum(RNl-RNu,(1,2)))*dt/mul
+    
+    if grav:
+        Accel+=Environment.gravity.repeat(Accel.shape[0],1)
+        
+
+    if acceladj:
+        Pa.v=Pa.v+Accel*dt
+        Pa.x=Pa.x+Pa.v*dt
+    return Accel,Rates
