@@ -30,6 +30,31 @@ class particles():
         particles.v=e*v
         particles.l=(torch.ones((N,2*F_l+1))/(2*(F_l+1))).cuda()
         particles.u=(torch.zeros((N,2*F_u+1))).cuda()
+
+    def createuniform(N=5000 , R=0.05 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
+        k_B=1.3806503e-23 #K_B in J/K
+        lamb=np.sqrt((2*k_B*T)/m)
+        
+        #picking a point on a quadrant on the surface of the sphere
+        z=torch.zeros((N)).cuda().uniform_()
+        theta=torch.arcsin(z).cuda()
+        phi=torch.zeros((N)).cuda().uniform_(0,np.pi/2)
+        x=torch.zeros(N,3).cuda()
+        x[:,0]=torch.sqrt(1-z**2)*torch.cos(phi)
+        x[:,1]=torch.sqrt(1-z**2)*torch.sin(phi)
+        x[:,2]=z
+        
+        v=torch.zeros((N,3)).to('cuda').uniform_(0,1)
+        v=-(lamb/1.2)*torch.arctanh(v) #mapping from uniform to positive Max.boltz. distribution (see notes)
+        
+        v=v/torch.norm(v)*np.sqrt(2*k_B*T/m)
+
+
+        e=1-2*torch.zeros((N,3)).cuda().random_(0,2) #creates an N*3 matrix of ones and minus ones
+        particles.x=R*e*x
+        particles.v=e*v
+        particles.l=(torch.ones((N,2*F_l+1))/(2*(F_l+1))).cuda()
+        particles.u=(torch.zeros((N,2*F_u+1))).cuda()
         
     def createbyinp(pos,vel,F_l,F_u):
         N=len(pos[:,0])

@@ -98,10 +98,9 @@ def RatesbyBeam(u,l,Pa,En,Rb):
 
 
 
-
-
-
-
+def integral(function,xmin=0,xmax=10,finesse=100):
+    x=np.linspace(xmin,xmax,num=(xmax-xmin)*finesse)
+    return np.sum(function(x))/finesse
     
 
 
