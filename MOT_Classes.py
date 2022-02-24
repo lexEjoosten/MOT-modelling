@@ -1,5 +1,5 @@
 import torch
-from fun_ctions import Rot,poltocart,carttopol
+from fun_ctions import rot,Rot,poltocart,carttopol
 from torch import Tensor
 import numpy as np
 from numpy import pi
@@ -9,7 +9,7 @@ import MOT_vars as vr
 class particles():
     
     
-    def create(N=5000 , R=0.05 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
+    def create(N=5000 , R=0.01 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
         k_B=1.3806503e-23 #K_B in J/K
         lamb=np.sqrt((2*k_B*T)/m)
         
@@ -31,7 +31,7 @@ class particles():
         particles.l=(torch.ones((N,2*F_l+1))/(2*(F_l+1))).cuda()
         particles.u=(torch.zeros((N,2*F_u+1))).cuda()
 
-    def createuniform(N=5000 , R=0.05 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
+    def createuniform(N=5000 , R=0.01 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
         k_B=1.3806503e-23 #K_B in J/K
         lamb=np.sqrt((2*k_B*T)/m)
         
@@ -47,7 +47,11 @@ class particles():
         v=torch.zeros((N,3)).to('cuda').uniform_(0,1)
         v=-(lamb/1.2)*torch.arctanh(v) #mapping from uniform to positive Max.boltz. distribution (see notes)
         
-        v=v/torch.norm(v)*np.sqrt(2*k_B*T/m)
+        v=(np.sqrt(2*k_B*T/m)*(v.transpose(0,1)/torch.norm(v,dim=1))).transpose(0,1)
+
+
+
+
 
 
         e=1-2*torch.zeros((N,3)).cuda().random_(0,2) #creates an N*3 matrix of ones and minus ones
@@ -125,26 +129,41 @@ class Environment():
 
     
     
-    dtun=vr.dtun
-    A=vr.A
-    B=Tensor([A,A,-2*A]).cuda() #
-    LAnFr=vr.LAnFr  
-    rad=vr.rad
-    cutoff=vr.cutoff #cutoff radius of the beams
     hbar=1.055e-34 #reduced planck constant in J/s
     c=3e8 #speed of light in m/s
-    Is=hbar*4*pi**3*Rubidium.Gamma*LAnFr**3/(27*c**2) #saturation intensity in W m^-2
+    dtun=vr.dtun
+    A=vr.A
+    BaHH=Tensor([A,A,-2*A]).cuda() #Anti-Helmholtz field
+    aHHassym=rot()
+    
+
+
+
+    
+
+
+    Wl=vr.wavelength
+    
+    LAnFr=2*pi*c/Wl
+
+    rad=vr.rad
+    
+    cutoff=vr.cutoff #cutoff radius of the beams
+    Is=vr.Saturation_isotropic#saturation intensity in W m^-2
     #Is=2.0
     
     Imax=50.0 #maximum beam intensity in Watt m^-2
-    Kmag=LAnFr/c  #photon momentum vector magnitude
+    Kmag=LAnFr/c  #photon momentum vector magnitude (in meters per rad)
     Kmag2=Kmag**2  #momentum vector squared important later.
     gravity=Tensor([0,0,-9.81]).cuda().unsqueeze(0)  #gravity accelaration tensor in m s^-2
     
     def Intensities(x):
+        #creating a vector of the distance from the center of each axis, for each particle.
         pos=torch.cat(((x[:,1]**2+x[:,2]**2).unsqueeze(1),(x[:,0]**2+x[:,2]**2).unsqueeze(1)),dim=1)
         pos=torch.cat((pos,(x[:,0]**2+x[:,1]**2).unsqueeze(1)),dim=1)
+        #intensity from each beam from each direction (all of this needs to be fixed for better generality  )
         Int=torch.pow(np.e,-(torch.pow(pos,2)/Environment.rad)).repeat(1,2)
+
         Int=torch.index_select(Int,1,torch.LongTensor([0,3,1,4,2,5]).cuda())
         Int=Int*Environment.Imax/Environment.Is
         return Int
@@ -154,13 +173,13 @@ class Environment():
     def Veldtun(v):
         kv = torch.inner(Environment.Lk,v)
         return -kv*Environment.Kmag
-    
+
     
     def Bdtun(Ml,Mu,x):
-        return 8.7941e10*torch.sqrt(torch.sum(torch.square(Environment.B*x),1))*(Rubidium.gl*Ml-Rubidium.gu*Mu)
+        return 8.7941e10*torch.sqrt(torch.sum(torch.square(Environment.BaHH*x),1))*(Rubidium.gl*Ml-Rubidium.gu*Mu)
     
     def eploc(x):
-        R1=Environment.Brot(Environment.B,x).unsqueeze(1).repeat(1,6,1,1)
+        R1=Environment.Brot(Environment.BaHH,x).unsqueeze(1).repeat(1,6,1,1)
         epr=Environment.LpolcartR.unsqueeze(0).repeat(x.shape[0],1,1,1)
         epc=Environment.LpolcartI.unsqueeze(0).repeat(x.shape[0],1,1,1)
         epr=torch.matmul(R1,epr)
@@ -172,7 +191,7 @@ class Environment():
     
         
     def Brot(B,x):
-        u=F.normalize(torch.matmul(Tensor([[0,1,0],[-1,0,0],[0,0,0]]).cuda().unsqueeze(0).repeat(x.shape[0],1,1),(B*x).unsqueeze(2)).squeeze())
+        u=F.normalize(torch.matmul(Tensor([[0,1,0],[-1,0,0],[0,0,0]]).cuda().unsqueeze(0).repeat(x.shape[0],1,1),(torch.matmul(Environment.aHHassym,(B*x).transpose(0,1)).transpose(0,1)).unsqueeze(2)).squeeze())
         W=torch.inner(Tensor([[[0,0,0],[0,0,-1],[0,1,0]],[[0,0,1],[0,0,0],[-1,0,0]],[[0,-1,0],[1,0,0],[0,0,0]]]).cuda(),u).transpose(1,2).transpose(0,1)
 
         phi=-torch.arccos(F.normalize(x)[:,2])
@@ -202,10 +221,12 @@ class Environment():
 
 def RatesbyBeam(u,l,Pa,En,Rb,dop,zee):
     s=En.Intensities(Pa.x)
+    #sprim=torch.sum(s,dim=2)
     den=(1+4*(En.fulldtun(l,u,dop,zee)/Rb.Gamma)**2+s)
     Rate=s*Rb.Gamma/2*En.eploc(Pa.x)[:,:,(1+(l-u)),0]/den
     Rate=Rate*torch.sqrt(Rb.BranRat[l+2,u+3])
     return Rate
+    
     
 
 

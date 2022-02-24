@@ -9,10 +9,10 @@ import torch
 
 
 
-def rot(a,b,c):
-    a=Tensor([[cos(a),-sin(a),0],[sin(a),cos(a),0],[0,0,1]]).cuda()
-    b=Tensor([[cos(b),0,sin(b)],[0,1,0],[-sin(b),0,cos(b)]]).cuda()
-    c=Tensor([[1,0,0],[0,cos(c),-sin(c)],[0,sin(c),cos(c)]]).cuda()
+def rot(alpha=0,beta=0,gamma=0):
+    a=Tensor([[cos(gamma),-sin(gamma),0],[sin(gamma),cos(gamma),0],[0,0,1]]).cuda()
+    b=Tensor([[cos(beta),0,sin(beta)],[0,1,0],[-sin(beta),0,cos(beta)]]).cuda()
+    c=Tensor([[1,0,0],[0,cos(alpha),-sin(alpha)],[0,sin(alpha),cos(alpha)]]).cuda()
     return torch.mm(torch.mm(a,b),c)
 
 def Rot(c,b,a):
