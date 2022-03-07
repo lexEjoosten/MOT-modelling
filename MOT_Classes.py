@@ -28,7 +28,7 @@ class particles():
         e=1-2*torch.zeros((N,3)).cuda().random_(0,2) #creates an N*3 matrix of ones and minus ones
         particles.x=R*e*x
         particles.v=e*v
-        particles.l=(torch.ones((N,2*F_l+1))/(2*(F_l+1))).cuda()
+        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).cuda()
         particles.u=(torch.zeros((N,2*F_u+1))).cuda()
 
     def createuniform(N=5000 , R=0.01 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
@@ -57,14 +57,22 @@ class particles():
         e=1-2*torch.zeros((N,3)).cuda().random_(0,2) #creates an N*3 matrix of ones and minus ones
         particles.x=R*e*x
         particles.v=e*v
-        particles.l=(torch.ones((N,2*F_l+1))/(2*(F_l+1))).cuda()
+        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).cuda()
         particles.u=(torch.zeros((N,2*F_u+1))).cuda()
+
+    def keep(i):
+        particles.x=particles.x[i,:]
+        particles.v=particles.v[i,:]
+        particles.l=particles.l[i,:]
+        particles.u=particles.u[i,:]
+        
+        
         
     def createbyinp(pos,vel,F_l,F_u):
         N=len(pos[:,0])
         particles.x=Tensor(pos).cuda()
         particles.v=Tensor(vel).cuda()
-        particles.l=(torch.ones((N,2*F_l+1))/(2*(F_l+1))).cuda()
+        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).cuda()
         particles.u=(torch.zeros((N,2*F_u+1))).cuda()
     
     def init_track(Simlen=1000,n=0):
@@ -91,15 +99,16 @@ class Rubidium:
     u=3  #This variable defines the angular momentum of the upper state.
     gl=1/2  #This variable defines the g-factor for the lower states.
     gu=2/3  #This variable defines the g-factor for the upper states.
-    Gamma=38.11e6  #this is the natural decay rate in s^-1
+    Gamma=int(38.11e6)  #this is the natural decay rate in s^-1
+    
     
     
     BranRat=Tensor([
-        [15/21,5/21,1/21,0,0,0,0],
-        [0,10/21,8/21,3/21,0,0,0],
-        [0,0,6/21,9/21,6/21,0,0],
-        [0,0,0,3/21,8/21,10/21,0],
-        [0,0,0,0,1/21,5/21,15/21]
+        [15,5,1,0,0,0,0],
+        [0,10,8,3,0,0,0],
+        [0,0,6,9,6,0,0],
+        [0,0,0,3,8,10,0],
+        [0,0,0,0,1,5,15]
     ]).cuda() #This tensor encodes the branching ratio/CB coeff, which are used for calculating the transition rates.
     
     
@@ -262,7 +271,7 @@ def forward(Pa=particles,En=Environment,Ru=Rubidium,timestep=0.001,ratemults=1, 
 
 
         if den_sim:
-            Pa.l+=(Ru.Gamma*torch.matmul(Br,Pa.u.unsqueeze(2)).squeeze()+torch.sum(RNu-RNl,(1,3)))*dt/mul
+            Pa.l+=(Ru.Gamma*7/5*torch.matmul(Br/21,Pa.u.unsqueeze(2)).squeeze()+torch.sum(RNu-RNl,(1,3)))*dt/mul
             Pa.u+=(-Ru.Gamma*Pa.u+torch.sum(RNl-RNu,(1,2)))*dt/mul
     
     if grav:
