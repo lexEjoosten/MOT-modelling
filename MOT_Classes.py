@@ -241,7 +241,7 @@ def RatesbyBeam(u,l,Pa,En,Rb,dop,zee):
 
 
 
-def forward(Pa=particles,En=Environment,Ru=Rubidium,timestep=0.001,ratemults=1, dop=True, zee=True, den_sim=False, acceladj=False, grav=False):
+def forward(Pa=particles,En=Environment,Ru=Rubidium,timestep=0.001,ratemults=1, dop=True, zee=True, acceladj=False, grav=False):
     
     Rates=torch.zeros((Pa.x.shape[0],6,5,7)).cuda()
     #calculate rate eqns:
@@ -260,20 +260,77 @@ def forward(Pa=particles,En=Environment,Ru=Rubidium,timestep=0.001,ratemults=1, 
     dt=timestep
     mul=ratemults
     Accel=torch.zeros(Pa.x.shape,device='cuda')
-    for i in range(mul):
+    
+
+    if type(ratemults)==int:
+        
+        for i in range(mul):
+            RNl=torch.mul(Rates.transpose(2,3).transpose(0,2),Pa.l).transpose(0,2).transpose(2,3)
+            RNu=torch.mul(Rates.transpose(0,2),Pa.u).transpose(0,2)
+            Rachang=torch.sum(RNl-RNu,(2,3))
+
+
+            Accel+=(Environment.hbar*Environment.Kmag/Rubidium.mass* torch.matmul(Rachang.unsqueeze(1).unsqueeze(1),Environment.Lk.unsqueeze(0).unsqueeze(3).transpose(1,2)).squeeze())/mul
+
+
+
+        
+            Pa.l+=(Ru.Gamma*7/5*torch.matmul(Br/21,Pa.u.unsqueeze(2)).squeeze()+torch.sum(RNu-RNl,(1,3)))*dt/mul
+            Pa.u+=(-Ru.Gamma*Pa.u+torch.sum(RNl-RNu,(1,2)))*dt/mul
+    elif ratemults=='dynamic':
+        R=torch.sum(Rates,dim=1).cuda()
+        M=torch.zeros((particles.x.shape[0],12,12)).cuda()
+        Rsl=torch.sum(R,dim=1)
+        Rsu=torch.sum(R,dim=2)
+
+        M[:,5:,5:]+=torch.diag(torch.ones(R.shape[2])*-Rubidium.Gamma).cuda()
+        M[:,5:,5:]-=torch.diag_embed(Rsl,dim1=1,dim2=0).transpose(0,2).cuda()
+        M[:,:5,:5]=-torch.diag_embed(Rsu,dim1=1,dim2=0).transpose(0,2).cuda()
+        M[:,5:,:5]+=R.transpose(1,2).cuda()
+        M[:,5:,:5]+=Rubidium.Gamma*torch.mul(torch.ones((R.shape[0],R.shape[1],R.shape[2]),device='cuda'),1/15*Rubidium.BranRat).transpose(1,2).cuda()
+        M[:,:5,5:]+=R.cuda()
+        M=M.transpose(1,2)
+
+        ratemulmin=4*int(torch.max(M)*dt)
+        phi=torch.cat((Pa.l,Pa.u),dim=1).unsqueeze(2)
+        K=torch.diag_embed(torch.ones((M.shape[0],M.shape[1])).cuda(),dim1=1,dim2=0).transpose(0,2)+dt/ratemulmin*M
+        phi=torch.matmul(torch.linalg.matrix_power(K,ratemulmin),phi)
+        phi=torch.divide(phi.squeeze().transpose(0,1),torch.sum(phi,dim=1).squeeze()).transpose(0,1) #renormalization
+        Pa.l=phi[:,:5]
+        Pa.u=phi[:,5:]
+
+        phi=None
+        R=None
+        Rsl=None
+        Rsu=None
+        M=None
+        K=None
+
+
+
         RNl=torch.mul(Rates.transpose(2,3).transpose(0,2),Pa.l).transpose(0,2).transpose(2,3)
         RNu=torch.mul(Rates.transpose(0,2),Pa.u).transpose(0,2)
         Rachang=torch.sum(RNl-RNu,(2,3))
 
 
-        Accel+=(Environment.hbar*Environment.Kmag/Rubidium.mass* torch.matmul(Rachang.unsqueeze(1).unsqueeze(1),Environment.Lk.unsqueeze(0).unsqueeze(3).transpose(1,2)).squeeze())/mul
+        Accel+=(Environment.hbar*Environment.Kmag/Rubidium.mass* torch.matmul(Rachang.unsqueeze(1).unsqueeze(1),Environment.Lk.unsqueeze(0).unsqueeze(3).transpose(1,2)).squeeze())
 
 
-
-        if den_sim:
-            Pa.l+=(Ru.Gamma*7/5*torch.matmul(Br/21,Pa.u.unsqueeze(2)).squeeze()+torch.sum(RNu-RNl,(1,3)))*dt/mul
-            Pa.u+=(-Ru.Gamma*Pa.u+torch.sum(RNl-RNu,(1,2)))*dt/mul
+        Rachang=None
+        RNl=None
+        RNu=None
     
+    elif ratemults==None:
+        RNl=torch.mul(Rates.transpose(2,3).transpose(0,2),Pa.l).transpose(0,2).transpose(2,3)
+        RNu=torch.mul(Rates.transpose(0,2),Pa.u).transpose(0,2)
+        Rachang=torch.sum(RNl-RNu,(2,3))
+
+
+        Accel+=(Environment.hbar*Environment.Kmag/Rubidium.mass* torch.matmul(Rachang.unsqueeze(1).unsqueeze(1),Environment.Lk.unsqueeze(0).unsqueeze(3).transpose(1,2)).squeeze())
+
+        
+
+
     if grav:
         Accel+=Environment.gravity.repeat(Accel.shape[0],1)
         
