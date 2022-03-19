@@ -2,36 +2,46 @@ from torch import Tensor
 import numpy as np
 from numpy import cos,sin,pi,sqrt
 import torch
+import MOT_vars as vr
 
 
 
 
+def randthreevecs(N=5000):
+    phi=2*pi*torch.rand(N).to(vr.base_device)
+    costheta=1-2*torch.rand(N).to(vr.base_device)
+    theta=torch.arccos(costheta)
+    norm=torch.zeros((N,3))
+    norm[:,0]=torch.sin(theta)*torch.cos(phi)
+    norm[:,1]=torch.sin(theta)*torch.sin(phi)
+    norm[:,2]=torch.cos(theta)
+    return(norm)
 
 
 
 def rot(alpha=0,beta=0,gamma=0):
-    a=Tensor([[cos(gamma),-sin(gamma),0],[sin(gamma),cos(gamma),0],[0,0,1]]).cuda()
-    b=Tensor([[cos(beta),0,sin(beta)],[0,1,0],[-sin(beta),0,cos(beta)]]).cuda()
-    c=Tensor([[1,0,0],[0,cos(alpha),-sin(alpha)],[0,sin(alpha),cos(alpha)]]).cuda()
+    a=Tensor([[cos(gamma),-sin(gamma),0],[sin(gamma),cos(gamma),0],[0,0,1]]).to(vr.base_device)
+    b=Tensor([[cos(beta),0,sin(beta)],[0,1,0],[-sin(beta),0,cos(beta)]]).to(vr.base_device)
+    c=Tensor([[1,0,0],[0,cos(alpha),-sin(alpha)],[0,sin(alpha),cos(alpha)]]).to(vr.base_device)
     return torch.mm(torch.mm(a,b),c)
 
 def Rot(c,b,a):
     A=torch.stack([
-        torch.stack([torch.cos(a),-torch.sin(a),torch.zeros(len(a)).cuda()]),
-        torch.stack([torch.sin(a),torch.cos(a),torch.zeros(len(a)).cuda()]),
-        torch.stack([torch.zeros(len(a)).cuda(),torch.zeros(len(a)).cuda(),torch.ones(len(a)).cuda()])
+        torch.stack([torch.cos(a),-torch.sin(a),torch.zeros(len(a)).to(vr.base_device)]),
+        torch.stack([torch.sin(a),torch.cos(a),torch.zeros(len(a)).to(vr.base_device)]),
+        torch.stack([torch.zeros(len(a)).to(vr.base_device),torch.zeros(len(a)).to(vr.base_device),torch.ones(len(a)).to(vr.base_device)])
     ]).transpose(0,2).transpose(1,2)
     
     B=torch.stack([
-        torch.stack([torch.cos(b),torch.zeros(len(b)).cuda(),torch.sin(b)]),
-        torch.stack([torch.zeros(len(b)).cuda(),torch.ones(len(b)).cuda(),torch.zeros(len(b)).cuda()]),
-        torch.stack([-torch.sin(b),torch.zeros(len(b)).cuda(), torch.cos(b)])
+        torch.stack([torch.cos(b),torch.zeros(len(b)).to(vr.base_device),torch.sin(b)]),
+        torch.stack([torch.zeros(len(b)).to(vr.base_device),torch.ones(len(b)).to(vr.base_device),torch.zeros(len(b)).to(vr.base_device)]),
+        torch.stack([-torch.sin(b),torch.zeros(len(b)).to(vr.base_device), torch.cos(b)])
     ]).transpose(0,2).transpose(1,2)
     
     C=torch.stack([
-        torch.stack([torch.ones(len(b)).cuda(),torch.zeros(len(b)).cuda(),torch.zeros(len(b)).cuda()]),
-        torch.stack([torch.zeros(len(b)).cuda(),torch.cos(c),-torch.sin(c)]),
-        torch.stack([torch.zeros(len(b)).cuda(),torch.sin(c),torch.cos(c)])
+        torch.stack([torch.ones(len(b)).to(vr.base_device),torch.zeros(len(b)).to(vr.base_device),torch.zeros(len(b)).to(vr.base_device)]),
+        torch.stack([torch.zeros(len(b)).to(vr.base_device),torch.cos(c),-torch.sin(c)]),
+        torch.stack([torch.zeros(len(b)).to(vr.base_device),torch.sin(c),torch.cos(c)])
     ]).transpose(0,2).transpose(1,2)
     
     return torch.matmul(A,torch.matmul(B,C))
@@ -48,8 +58,8 @@ def WignerD(B):
 
 
 def poltocart(ep):
-    epr=torch.matmul(Tensor([[-1/sqrt(2),0,1/sqrt(2)],[0,0,0],[0,1,0]]).cuda().unsqueeze(0).repeat(ep.shape[0],1,1),ep)
-    epc=torch.matmul(Tensor([[0,0,0],[1/sqrt(2),0,1/sqrt(2)],[0,0,0]]).cuda().unsqueeze(0).repeat(ep.shape[0],1,1),ep)
+    epr=torch.matmul(Tensor([[-1/sqrt(2),0,1/sqrt(2)],[0,0,0],[0,1,0]]).to(vr.base_device).unsqueeze(0).repeat(ep.shape[0],1,1),ep)
+    epc=torch.matmul(Tensor([[0,0,0],[1/sqrt(2),0,1/sqrt(2)],[0,0,0]]).to(vr.base_device).unsqueeze(0).repeat(ep.shape[0],1,1),ep)
     
     
     
@@ -60,11 +70,11 @@ def poltocart(ep):
 def carttopol(ep):
     epr=ep[0]
     epc=ep[1]
-    epr1=torch.matmul(Tensor([[-1/sqrt(2),0,0],[0,0,1],[1/sqrt(2),0,0]]).cuda().unsqueeze(0).unsqueeze(1).repeat(epr.shape[0],epr.shape[1],1,1),epr)
-    epr2=torch.matmul(Tensor([[0,1/sqrt(2),0],[0,0,0],[0,1/sqrt(2),0]]).cuda().unsqueeze(0).unsqueeze(1).repeat(epr.shape[0],epr.shape[1],1,1),epc)
+    epr1=torch.matmul(Tensor([[-1/sqrt(2),0,0],[0,0,1],[1/sqrt(2),0,0]]).to(vr.base_device).unsqueeze(0).unsqueeze(1).repeat(epr.shape[0],epr.shape[1],1,1),epr)
+    epr2=torch.matmul(Tensor([[0,1/sqrt(2),0],[0,0,0],[0,1/sqrt(2),0]]).to(vr.base_device).unsqueeze(0).unsqueeze(1).repeat(epr.shape[0],epr.shape[1],1,1),epc)
     
-    epc1=torch.matmul(Tensor([[-1/sqrt(2),0,0],[0,0,1],[1/sqrt(2),0,0]]).cuda().unsqueeze(0).unsqueeze(1).repeat(epr.shape[0],epr.shape[1],1,1),epc)
-    epc2=torch.matmul(Tensor([[0,-1/sqrt(2),0],[0,0,0],[0,-1/sqrt(2),0]]).cuda().unsqueeze(0).unsqueeze(1).repeat(epr.shape[0],epr.shape[1],1,1),epr)
+    epc1=torch.matmul(Tensor([[-1/sqrt(2),0,0],[0,0,1],[1/sqrt(2),0,0]]).to(vr.base_device).unsqueeze(0).unsqueeze(1).repeat(epr.shape[0],epr.shape[1],1,1),epc)
+    epc2=torch.matmul(Tensor([[0,-1/sqrt(2),0],[0,0,0],[0,-1/sqrt(2),0]]).to(vr.base_device).unsqueeze(0).unsqueeze(1).repeat(epr.shape[0],epr.shape[1],1,1),epr)
     
     epr=epr1+epr2
     epc=epc1+epc2
@@ -83,8 +93,8 @@ def Mvect_outer(vector, Matrix):
 
     
     
-E=Tensor([pi/2,pi,2*pi,pi/2]).cuda()
-x=Tensor([[1,0,0],[-1,0,0],[0,1,0],[0,0,1]]).cuda().unsqueeze(2)
+E=Tensor([pi/2,pi,2*pi,pi/2]).to(vr.base_device)
+x=Tensor([[1,0,0],[-1,0,0],[0,1,0],[0,0,1]]).to(vr.base_device).unsqueeze(2)
 x=poltocart(x)
 
 

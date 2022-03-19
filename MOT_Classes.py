@@ -9,42 +9,42 @@ import MOT_vars as vr
 class particles():
     
     
-    def create(N=5000 , R=0.01 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
+    def create(N=5000 , R=0.01 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ,device='cuda'): #setup to handle rubidium D2
         k_B=1.3806503e-23 #K_B in J/K
         lamb=np.sqrt((2*k_B*T)/m)
         
         #picking a point on a quadrant on the surface of the sphere
-        z=torch.zeros((N)).cuda().uniform_()
-        theta=torch.arcsin(z).cuda()
-        phi=torch.zeros((N)).cuda().uniform_(0,np.pi/2)
-        x=torch.zeros(N,3).cuda()
+        z=torch.zeros((N)).to(vr.base_device).uniform_()
+        theta=torch.arcsin(z).to(vr.base_device)
+        phi=torch.zeros((N)).to(vr.base_device).uniform_(0,np.pi/2)
+        x=torch.zeros(N,3).to(vr.base_device)
         x[:,0]=torch.sqrt(1-z**2)*torch.cos(phi)
         x[:,1]=torch.sqrt(1-z**2)*torch.sin(phi)
         x[:,2]=z
         
-        v=torch.zeros((N,3)).to('cuda').uniform_(0,1)
+        v=torch.zeros((N,3)).to(vr.base_device).uniform_(0,1)
         v=-(lamb/1.2)*torch.arctanh(v) #mapping from uniform to positive Max.boltz. distribution (see notes)
         
-        e=1-2*torch.zeros((N,3)).cuda().random_(0,2) #creates an N*3 matrix of ones and minus ones
+        e=1-2*torch.zeros((N,3)).to(vr.base_device).random_(0,2) #creates an N*3 matrix of ones and minus ones
         particles.x=R*e*x
         particles.v=e*v
-        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).cuda()
-        particles.u=(torch.zeros((N,2*F_u+1))).cuda()
+        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).to(vr.base_device)
+        particles.u=(torch.zeros((N,2*F_u+1))).to(vr.base_device)
 
-    def createuniform(N=5000 , R=0.01 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ): #setup to handle rubidium D2
+    def createuniform(N=5000 , R=0.01 , T=180 , m=1.455181063e-25 , F_l=2 , F_u=3 ,device='cuda'): #setup to handle rubidium D2
         k_B=1.3806503e-23 #K_B in J/K
         lamb=np.sqrt((2*k_B*T)/m)
         
         #picking a point on a quadrant on the surface of the sphere
-        z=torch.zeros((N)).cuda().uniform_()
-        theta=torch.arcsin(z).cuda()
-        phi=torch.zeros((N)).cuda().uniform_(0,np.pi/2)
-        x=torch.zeros(N,3).cuda()
+        z=torch.zeros((N)).to(vr.base_device).uniform_()
+        theta=torch.arcsin(z).to(vr.base_device)
+        phi=torch.zeros((N)).to(vr.base_device).uniform_(0,np.pi/2)
+        x=torch.zeros(N,3).to(vr.base_device)
         x[:,0]=torch.sqrt(1-z**2)*torch.cos(phi)
         x[:,1]=torch.sqrt(1-z**2)*torch.sin(phi)
         x[:,2]=z
         
-        v=torch.zeros((N,3)).to('cuda').uniform_(0,1)
+        v=torch.zeros((N,3)).to(vr.base_device).uniform_(0,1)
         v=-(lamb/1.2)*torch.arctanh(v) #mapping from uniform to positive Max.boltz. distribution (see notes)
         
         v=(np.sqrt(2*k_B*T/m)*(v.transpose(0,1)/torch.norm(v,dim=1))).transpose(0,1)
@@ -54,11 +54,11 @@ class particles():
 
 
 
-        e=1-2*torch.zeros((N,3)).cuda().random_(0,2) #creates an N*3 matrix of ones and minus ones
+        e=1-2*torch.zeros((N,3)).to(vr.base_device).random_(0,2) #creates an N*3 matrix of ones and minus ones
         particles.x=R*e*x
         particles.v=e*v
-        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).cuda()
-        particles.u=(torch.zeros((N,2*F_u+1))).cuda()
+        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).to(vr.base_device)
+        particles.u=(torch.zeros((N,2*F_u+1))).to(vr.base_device)
 
     def keep(i):
         particles.x=particles.x[i,:]
@@ -70,13 +70,13 @@ class particles():
         
     def createbyinp(pos,vel,F_l,F_u):
         N=len(pos[:,0])
-        particles.x=Tensor(pos).cuda()
-        particles.v=Tensor(vel).cuda()
-        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).cuda()
-        particles.u=(torch.zeros((N,2*F_u+1))).cuda()
+        particles.x=Tensor(pos).to(vr.base_device)
+        particles.v=Tensor(vel).to(vr.base_device)
+        particles.l=(torch.ones((N,2*F_l+1))/((2*F_l)+1)).to(vr.base_device)
+        particles.u=(torch.zeros((N,2*F_u+1))).to(vr.base_device)
     
     def init_track(Simlen=1000,n=0):
-        x,v=torch.zeros((Simlen+1,3)).cuda(),torch.zeros((Simlen+1,3)).cuda()
+        x,v=torch.zeros((Simlen+1,3)).to(vr.base_device),torch.zeros((Simlen+1,3)).to(vr.base_device)
         x[0],v[0]=particles.x[n],particles.v[0]
         return x,v
 
@@ -109,19 +109,19 @@ class Rubidium:
         [0,0,6,9,6,0,0],
         [0,0,0,3,8,10,0],
         [0,0,0,0,1,5,15]
-    ]).cuda() #This tensor encodes the branching ratio/CB coeff, which are used for calculating the transition rates.
+    ]).to(vr.base_device) #This tensor encodes the branching ratio/CB coeff, which are used for calculating the transition rates.
     
     
     
 
 class Environment():            
     #define lasers by intensity in their k-vector. (i.e. give directionality and orientation.)
-    Lk=torch.zeros(6,3).cuda()
+    Lk=torch.zeros(6,3).to(vr.base_device)
     for i in range(0,6):
         #define 6 orth. laser unit k-vectors.
         Lk[i,int(i/2)]=2*((i+1)%2)-1
         
-    Lpol=torch.zeros(6,3).cuda()
+    Lpol=torch.zeros(6,3).to(vr.base_device)
     for i in range(0,4):
         #define polarization using (ep+,pi,ep-)
         Lpol[i,0]=1
@@ -130,7 +130,7 @@ class Environment():
         Lpol[i,0]=1
         
     
-    rinit=Rot(Tensor([0,0,pi/2,-pi/2,0,pi]).cuda(),Tensor([-pi/2,pi/2,0,0,0,0]).cuda(),Tensor([0,0,0,0,0,0]).cuda()) #this initializes the rotation tensor
+    rinit=Rot(Tensor([0,0,pi/2,-pi/2,0,pi]).to(vr.base_device),Tensor([-pi/2,pi/2,0,0,0,0]).to(vr.base_device),Tensor([0,0,0,0,0,0]).to(vr.base_device)) #this initializes the rotation tensor
     Lpolcart=poltocart(Lpol.unsqueeze(2))
     LpolcartR=torch.matmul(rinit,Lpolcart[0])
     LpolcartI=torch.matmul(rinit,Lpolcart[1])
@@ -142,7 +142,7 @@ class Environment():
     c=3e8 #speed of light in m/s
     dtun=vr.dtun
     A=vr.A
-    BaHH=Tensor([A,A,-2*A]).cuda() #Anti-Helmholtz field
+    BaHH=Tensor([A,A,-2*A]).to(vr.base_device) #Anti-Helmholtz field
     aHHassym=rot()
     
 
@@ -154,17 +154,16 @@ class Environment():
     Wl=vr.wavelength
     
     LAnFr=2*pi*c/Wl
-
     rad=vr.rad
     
     cutoff=vr.cutoff #cutoff radius of the beams
     Is=vr.Saturation_isotropic#saturation intensity in W m^-2
     #Is=2.0
     
-    Imax=50.0 #maximum beam intensity in Watt m^-2
+    Imax=14.0 #maximum beam intensity in Watt m^-2
     Kmag=LAnFr/c  #photon momentum vector magnitude (in meters per rad)
     Kmag2=Kmag**2  #momentum vector squared important later.
-    gravity=Tensor([0,0,-9.81]).cuda().unsqueeze(0)  #gravity accelaration tensor in m s^-2
+    gravity=Tensor([0,0,-9.81]).to(vr.base_device).unsqueeze(0)  #gravity accelaration tensor in m s^-2
     
     def Intensities(x):
         #creating a vector of the distance from the center of each axis, for each particle.
@@ -173,7 +172,7 @@ class Environment():
         #intensity from each beam from each direction (all of this needs to be fixed for better generality  )
         Int=torch.pow(np.e,-(torch.pow(pos,2)/Environment.rad)).repeat(1,2)
 
-        Int=torch.index_select(Int,1,torch.LongTensor([0,3,1,4,2,5]).cuda())
+        Int=torch.index_select(Int,1,torch.LongTensor([0,3,1,4,2,5]).to(vr.base_device))
         Int=Int*Environment.Imax/Environment.Is
         return Int
     
@@ -200,12 +199,12 @@ class Environment():
     
         
     def Brot(B,x):
-        u=F.normalize(torch.matmul(Tensor([[0,1,0],[-1,0,0],[0,0,0]]).cuda().unsqueeze(0).repeat(x.shape[0],1,1),(torch.matmul(Environment.aHHassym,(B*x).transpose(0,1)).transpose(0,1)).unsqueeze(2)).squeeze())
-        W=torch.inner(Tensor([[[0,0,0],[0,0,-1],[0,1,0]],[[0,0,1],[0,0,0],[-1,0,0]],[[0,-1,0],[1,0,0],[0,0,0]]]).cuda(),u).transpose(1,2).transpose(0,1)
+        u=F.normalize(torch.matmul(Tensor([[0,1,0],[-1,0,0],[0,0,0]]).to(vr.base_device).unsqueeze(0).repeat(x.shape[0],1,1),(torch.matmul(Environment.aHHassym,(B*x).transpose(0,1)).transpose(0,1)).unsqueeze(2)).squeeze())
+        W=torch.inner(Tensor([[[0,0,0],[0,0,-1],[0,1,0]],[[0,0,1],[0,0,0],[-1,0,0]],[[0,-1,0],[1,0,0],[0,0,0]]]).to(vr.base_device),u).transpose(1,2).transpose(0,1)
 
         phi=-torch.arccos(F.normalize(x)[:,2])
         
-        Id=Tensor([[1,0,0],[0,1,0],[0,0,1]]).cuda().unsqueeze(0).repeat(x.shape[0],1,1)
+        Id=Tensor([[1,0,0],[0,1,0],[0,0,1]]).to(vr.base_device).unsqueeze(0).repeat(x.shape[0],1,1)
         
         R=Id+(W.transpose(0,2)*torch.sin(phi)).transpose(0,2)+((torch.matmul(W,W)).transpose(0,2)*(2*torch.sin(phi/2)**2)).transpose(0,2)
         
@@ -243,7 +242,7 @@ def RatesbyBeam(u,l,Pa,En,Rb,dop,zee):
 
 def forward(Pa=particles,En=Environment,Ru=Rubidium,timestep=0.001,ratemults=1, dop=True, zee=True, acceladj=False, grav=False):
     
-    Rates=torch.zeros((Pa.x.shape[0],6,5,7)).cuda()
+    Rates=torch.zeros((Pa.x.shape[0],6,5,7)).to(vr.base_device)
     #calculate rate eqns:
     for l in range(-2,3):
         for u in range(-3,4):
@@ -278,22 +277,22 @@ def forward(Pa=particles,En=Environment,Ru=Rubidium,timestep=0.001,ratemults=1, 
             Pa.l+=(Ru.Gamma*7/5*torch.matmul(Br/21,Pa.u.unsqueeze(2)).squeeze()+torch.sum(RNu-RNl,(1,3)))*dt/mul
             Pa.u+=(-Ru.Gamma*Pa.u+torch.sum(RNl-RNu,(1,2)))*dt/mul
     elif ratemults=='dynamic':
-        R=torch.sum(Rates,dim=1).cuda()
-        M=torch.zeros((particles.x.shape[0],12,12)).cuda()
+        R=torch.sum(Rates,dim=1).to(vr.base_device)
+        M=torch.zeros((particles.x.shape[0],12,12)).to(vr.base_device)
         Rsl=torch.sum(R,dim=1)
         Rsu=torch.sum(R,dim=2)
 
-        M[:,5:,5:]+=torch.diag(torch.ones(R.shape[2])*-Rubidium.Gamma).cuda()
-        M[:,5:,5:]-=torch.diag_embed(Rsl,dim1=1,dim2=0).transpose(0,2).cuda()
-        M[:,:5,:5]=-torch.diag_embed(Rsu,dim1=1,dim2=0).transpose(0,2).cuda()
-        M[:,5:,:5]+=R.transpose(1,2).cuda()
-        M[:,5:,:5]+=Rubidium.Gamma*torch.mul(torch.ones((R.shape[0],R.shape[1],R.shape[2]),device='cuda'),1/15*Rubidium.BranRat).transpose(1,2).cuda()
-        M[:,:5,5:]+=R.cuda()
+        M[:,5:,5:]+=torch.diag(torch.ones(R.shape[2])*-Rubidium.Gamma).to(vr.base_device)
+        M[:,5:,5:]-=torch.diag_embed(Rsl,dim1=1,dim2=0).transpose(0,2).to(vr.base_device)
+        M[:,:5,:5]=-torch.diag_embed(Rsu,dim1=1,dim2=0).transpose(0,2).to(vr.base_device)
+        M[:,5:,:5]+=R.transpose(1,2).to(vr.base_device)
+        M[:,5:,:5]+=Rubidium.Gamma*torch.mul(torch.ones((R.shape[0],R.shape[1],R.shape[2]),device='cuda'),1/15*Rubidium.BranRat).transpose(1,2).to(vr.base_device)
+        M[:,:5,5:]+=R.to(vr.base_device)
         M=M.transpose(1,2)
 
         ratemulmin=4*int(torch.max(M)*dt)
         phi=torch.cat((Pa.l,Pa.u),dim=1).unsqueeze(2)
-        K=torch.diag_embed(torch.ones((M.shape[0],M.shape[1])).cuda(),dim1=1,dim2=0).transpose(0,2)+dt/ratemulmin*M
+        K=torch.diag_embed(torch.ones((M.shape[0],M.shape[1])).to(vr.base_device),dim1=1,dim2=0).transpose(0,2)+dt/ratemulmin*M
         phi=torch.matmul(torch.linalg.matrix_power(K,ratemulmin),phi)
         phi=torch.divide(phi.squeeze().transpose(0,1),torch.sum(phi,dim=1).squeeze()).transpose(0,1) #renormalization
         Pa.l=phi[:,:5]
